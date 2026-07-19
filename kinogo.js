@@ -22,10 +22,12 @@
         var html = $('<div></div>');
         var active_card = object.movie;
 
+        // ВАЖНО: Инициализируем скролл сразу, чтобы Lampa не крашилась
+        html.append(scroll.render());
+
         this.create = function () {
             var _this = this;
 
-            // Показываем загрузчик
             if (this.activity && typeof this.activity.loader === 'function') {
                 this.activity.loader(true);
             }
@@ -80,12 +82,8 @@
                             quality: element.quality || '1080p'
                         };
 
-                        // Сначала передаем плейлист, затем запускаем
                         Lampa.Player.playlist([video]);
                         Lampa.Player.play(video);
-                        
-                        // Скрываем背景 (зависит от версии Lampa, обычно вызывается автоматически, но можно добавить)
-                        // Lampa.Controller.toggle('content'); 
                     } else {
                         Lampa.Noty.show('Нет доступного потока для этой озвучки');
                     }
@@ -94,8 +92,6 @@
                 scroll.append(item);
                 items.push(item);
             });
-
-            html.append(scroll.render());
         };
 
         this.empty = function () {
@@ -103,7 +99,8 @@
                 title: 'Ничего не найдено',
                 descr: 'Не удалось извлечь потоки Kinogo'
             });
-            html.append(emptyView);
+            // Добавляем экран пустоты в скролл
+            scroll.append(emptyView);
         };
 
         this.render = function () {
@@ -122,10 +119,8 @@
     function initMain() {
         if (typeof Lampa === 'undefined') return;
 
-        // 1. Регистрация компонента
         Lampa.Component.add('kinogo', KinogoComponent);
 
-        // 2. Манифест плагина
         var manifest = {
             type: 'video',
             version: mod_version,
@@ -149,12 +144,10 @@
             }
         };
 
-        // Безопасная регистрация плагина
         if (Lampa.Plugins && typeof Lampa.Plugins.add === 'function') {
             Lampa.Plugins.add(manifest);
         }
 
-        // 3. Шаблон кнопки
         var buttonTemplate = '<div class="full-start__button selector view--kinogo" data-subtitle="Kinogo">' +
             '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:8px;">' +
             '<polygon points="5 3 19 12 5 21 5 3"></polygon>' +
@@ -162,34 +155,39 @@
             '<span>Kinogo</span>' +
             '</div>';
 
-        // 4. Слушатель карточки фильма
         Lampa.Listener.follow('full', function (e) {
             if (e.type === 'complite') {
-                var renderNode = e.object.activity && e.object.activity.render ? e.object.activity.render() : null;
-                if (!renderNode) return;
+                try {
+                    var activity = e.object.activity || e.object;
+                    var renderNode = activity && typeof activity.render === 'function' ? activity.render() : false;
+                    
+                    if (!renderNode) return;
 
-                // Защита от дублирования кнопки
-                if (renderNode.find('.view--kinogo').length) return;
+                    // Защита от дублирования кнопки
+                    if (renderNode.find('.view--kinogo').length) return;
 
-                var btn = $(buttonTemplate);
-                btn.on('hover:enter', function () {
-                    Lampa.Activity.push({
-                        url: '',
-                        title: 'Kinogo — ' + (e.data.movie.title || e.data.movie.name || ''),
-                        component: 'kinogo',
-                        movie: e.data.movie,
-                        page: 1
+                    var btn = $(buttonTemplate);
+                    btn.on('hover:enter', function () {
+                        Lampa.Activity.push({
+                            url: '',
+                            title: 'Kinogo — ' + (e.data.movie.title || e.data.movie.name || ''),
+                            component: 'kinogo',
+                            movie: e.data.movie,
+                            page: 1
+                        });
                     });
-                });
 
-                var target = renderNode.find('.view--torrent');
-                if (target.length) {
-                    target.after(btn);
-                } else {
-                    var buttonsContainer = renderNode.find('.full-start__buttons');
-                    if (buttonsContainer.length) {
-                        buttonsContainer.append(btn);
+                    var target = renderNode.find('.view--torrent');
+                    if (target.length) {
+                        target.after(btn);
+                    } else {
+                        var buttonsContainer = renderNode.find('.full-start__buttons');
+                        if (buttonsContainer.length) {
+                            buttonsContainer.append(btn);
+                        }
                     }
+                } catch (er) {
+                    console.log('Kinogo plugin listener error:', er);
                 }
             }
         });
@@ -200,7 +198,6 @@
         initMain();
     }
 
-    // Безопасный запуск
     if (typeof window !== 'undefined') {
         if (window.appready) {
             startPlugin();
